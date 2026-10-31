@@ -32,33 +32,30 @@ def _ensure_tables(spark: SparkSession, cfg: PipelineConfig) -> None:
 def _make_batch_processor(cfg: PipelineConfig, counters: dict):
     def process(batch_df: DataFrame, batch_id: int) -> None:
         spark = batch_df.sparkSession
-        cleaned = T.clean_orders(batch_df).persist()
-        try:
-            valid, invalid = T.apply_quality_rules(cleaned)
+        cleaned = T.clean_orders(batch_df)
+        valid, invalid = T.apply_quality_rules(cleaned)
 
-            bad = invalid.select(
-                "_raw_record", "_dq_failures", "_source_file", F.current_timestamp().alias("_quarantined_ts")
-            )
-            bad_count = bad.count()
-            if bad_count:
-                bad.write.mode("append").saveAsTable(cfg.quarantine_table)
+        bad = invalid.select(
+            "_raw_record", "_dq_failures", "_source_file", F.current_timestamp().alias("_quarantined_ts")
+        )
+        bad_count = bad.count()
+        if bad_count:
+            bad.write.mode("append").saveAsTable(cfg.quarantine_table)
 
-            good = (
-                T.dedupe_latest(valid)
-                .withColumn("_updated_ts", F.current_timestamp())
-                .select(*T.SILVER_COLUMNS)
-            )
-            (
-                DeltaTable.forName(spark, cfg.silver_table).alias("t")
-                .merge(good.alias("s"), "t.order_id = s.order_id")
-                .whenMatchedUpdateAll(condition="s.order_ts >= t.order_ts")
-                .whenNotMatchedInsertAll()
-                .execute()
-            )
-            counters["quarantined"] += bad_count
-            log.info("silver batch %s done (quarantined=%s)", batch_id, bad_count)
-        finally:
-            cleaned.unpersist()
+        good = (
+            T.dedupe_latest(valid)
+            .withColumn("_updated_ts", F.current_timestamp())
+            .select(*T.SILVER_COLUMNS)
+        )
+        (
+            DeltaTable.forName(spark, cfg.silver_table).alias("t")
+            .merge(good.alias("s"), "t.order_id = s.order_id")
+            .whenMatchedUpdateAll(condition="s.order_ts >= t.order_ts")
+            .whenNotMatchedInsertAll()
+            .execute()
+        )
+        counters["quarantined"] += bad_count
+        log.info("silver batch %s done (quarantined=%s)", batch_id, bad_count)
 
     return process
 
@@ -66,6 +63,7 @@ def _make_batch_processor(cfg: PipelineConfig, counters: dict):
 def run_silver(spark: SparkSession, cfg: PipelineConfig, metrics: dict) -> None:
     _ensure_tables(spark, cfg)
     counters = {"quarantined": 0}
+    quarantined_before = spark.read.table(cfg.quarantine_table).count()
 
     query = (
         spark.readStream.table(cfg.bronze_table)
@@ -77,4 +75,5 @@ def run_silver(spark: SparkSession, cfg: PipelineConfig, metrics: dict) -> None:
     )
     query.awaitTermination()
     metrics["rows_read"] = total_input_rows(query)
-    metrics["rows_quarantined"] = counters["quarantined"]
+    metrics["rows_quarantined"] = spark.read.table(cfg.quarantine_table).count() - quarantined_before
+  

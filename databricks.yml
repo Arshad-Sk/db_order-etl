@@ -25,11 +25,11 @@ targets:
     mode: development            # prefixes resources, pauses schedules
     default: true
     workspace:
-      host: https://adb-REPLACE_DEV.azuredatabricks.net
+      host: https://adb-7405611896605616.16.azuredatabricks.net
     variables:
       catalog: dev_catalog
-      storage_account: REPLACE_devstorageacct
-      alert_email: you@company.com
+      storage_account: arshadordersdev01
+      alert_email: brtk557@gmail.com
 
   prod:
     mode: production
