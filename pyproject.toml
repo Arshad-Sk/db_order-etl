@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "etl_pipeline"
+version = "0.1.0"
+description = "Production medallion ETL pipeline for Azure Databricks + ADLS Gen2"
+requires-python = ">=3.10"
+dependencies = []          # pyspark / delta are provided by the Databricks Runtime
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pyspark==3.5.*", "ruff", "build"]
+
+[project.scripts]
+run = "etl_pipeline.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]

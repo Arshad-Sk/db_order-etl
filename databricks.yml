@@ -1,0 +1,48 @@
+bundle:
+  name: orders_etl
+
+include:
+  - resources/*.yml
+
+artifacts:
+  etl_pipeline:
+    type: whl
+    build: python -m build --wheel
+    path: .
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for this environment
+  storage_account:
+    description: ADLS Gen2 storage account name
+  alert_email:
+    description: Email for failure notifications
+  node_type_id:
+    default: Standard_DS3_v2
+
+targets:
+  dev:
+    mode: development            # prefixes resources, pauses schedules
+    default: true
+    workspace:
+      host: https://adb-REPLACE_DEV.azuredatabricks.net
+    variables:
+      catalog: dev_catalog
+      storage_account: REPLACE_devstorageacct
+      alert_email: you@company.com
+
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-REPLACE_PROD.azuredatabricks.net
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    run_as:
+      service_principal_name: "REPLACE-with-service-principal-application-id"
+    variables:
+      catalog: prod_catalog
+      storage_account: REPLACE_prodstorageacct
+      alert_email: data-alerts@company.com
+      node_type_id: Standard_DS4_v2
+    permissions:
+      - group_name: data-engineers
+        level: CAN_VIEW
